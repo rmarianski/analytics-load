@@ -78,19 +78,42 @@
     :get  (make-get  output-format max-features bbox)
     :post (make-post output-format max-features bbox)))
 
+(def state (ref {}))
+
+(defn init-state [& [total]]
+  (dosync
+   (ref-set state
+            {:complete 0
+             :success  0
+             :failure  0
+             :total    (or total 0)})))
+
 (defn random-request-fn []
   (apply
    make-request-fn
    (map rand-nth [[:get :post] possible-formats possible-maxfeatures possible-bboxes])))
+
+(defn update-state [is-successful]
+  (dosync
+   (alter state update-in [:complete] inc)
+   (alter state update-in [(if is-successful :success :failure)] inc)))
+
+(defn request-completed [result]
+  (update-state (= 200 (:status result))))
+
+(defn process-request [f]
+  (request-completed (f)))
 
 (defn go! [& [nthreads nloops]]
   (let [number (fn [x default] (Long. (or x default)))
         nthreads (number nthreads 1)
         nloops (number nloops 1)
         pool (Executors/newFixedThreadPool nthreads)
+        total (* nloops nthreads)
         tasks (repeatedly
-               (* nloops nthreads)
-               #(fn [] ((random-request-fn))))]
+               total
+               #(fn [] (process-request (random-request-fn))))]
+    (init-state total)
     (doseq [future (.invokeAll pool tasks)]
       (.get future))
     (.shutdown pool)))

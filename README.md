@@ -10,7 +10,13 @@ Fire up a swank server, compile, and:
 (in-ns 'analytics-load.core)
 (let [n-threads 10
       n-loops   100]
-  (go! n-threads n-loops))
+  (future (go! n-threads n-loops)))
+```
+
+Then you can keep track of progress with:
+```clj
+@state
+```
 
 ## License
 
